@@ -2,13 +2,15 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import requests
 import json
+import os
+
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "deepseek/deepseek-r1-0528:free"
+MODEL = "openai/gpt-oss-20b:free"
 
 @app.route("/")
 def index():
