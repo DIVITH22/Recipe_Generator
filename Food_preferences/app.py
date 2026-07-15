@@ -1,44 +1,70 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import requests
-import json
 import os
-
+import traceback
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Use a reliable free model
 MODEL = "openai/gpt-oss-20b:free"
+
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
+
 @app.route("/get_food_recommendations", methods=["POST"])
 def get_food_recommendations():
     try:
-        user_data = request.get_json()
-        ingredients = user_data['ingredients']
-        preference = user_data['preference']
-        style = user_data['style']
-        age = user_data['age']
 
-        prompt = (
-            f"User has ingredients: {ingredients}. "
-            f"They prefer {preference} food. "
-            f"They want {style} style food, and their age is {age}. "
-            "Recommend four food items with ingredients and steps to prepare. "
-            "You no need to use ** in the generating text."
-        )
+        # Check API Key
+        if not OPENROUTER_API_KEY:
+            return jsonify({"error": "OPENROUTER_API_KEY not found"}), 500
+
+        user_data = request.get_json()
+
+        ingredients = user_data.get("ingredients", "")
+        preference = user_data.get("preference", "")
+        style = user_data.get("style", "")
+        age = user_data.get("age", "")
+
+        prompt = f"""
+User has these ingredients:
+{ingredients}
+
+Preference:
+{preference}
+
+Food Style:
+{style}
+
+Age:
+{age}
+
+Recommend exactly four recipes.
+
+For each recipe include:
+
+1. Recipe Name
+2. Ingredients
+3. Preparation Steps
+
+Do not use markdown.
+Do not use **.
+"""
 
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            # Optionally add Referer and X-Title headers if needed
+            "Content-Type": "application/json"
         }
-        data = {
+
+        payload = {
             "model": MODEL,
             "messages": [
                 {
@@ -48,22 +74,32 @@ def get_food_recommendations():
             ]
         }
 
-        response = requests.post(OPENROUTER_API_URL, headers=headers, data=json.dumps(data))
+        response = requests.post(
+            OPENROUTER_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=90
+        )
+
+        print(response.status_code)
+        print(response.text)
+
         response.raise_for_status()
+
         result = response.json()
 
-        # Extract the generated text from the response
-        food_items = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        food_items = result["choices"][0]["message"]["content"]
 
-        if food_items:
-            print("FOOD: ", food_items)
-            return jsonify({"foodItems": food_items})
-        else:
-            return jsonify({"error": "No recommendations generated"}), 500
+        return jsonify({
+            "foodItems": food_items
+        })
 
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        traceback.print_exc()
+        return jsonify({
+            "error": "Server Error"
+        }), 500
+
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
