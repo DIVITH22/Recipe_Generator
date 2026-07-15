@@ -103,3 +103,6 @@ Do not use **.
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+print("=== NEW VERSION DEPLOYED ===")
+print(response.status_code)
+print(response.text)
