@@ -10,7 +10,7 @@ CORS(app)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Use a reliable free model
+# Change this if you want to use another model
 MODEL = "openai/gpt-oss-20b:free"
 
 
@@ -21,48 +21,38 @@ def index():
 
 @app.route("/get_food_recommendations", methods=["POST"])
 def get_food_recommendations():
+
+    if not OPENROUTER_API_KEY:
+        return jsonify({"error": "OPENROUTER_API_KEY not found"}), 500
+
     try:
 
-        # Check API Key
-        if not OPENROUTER_API_KEY:
-            return jsonify({"error": "OPENROUTER_API_KEY not found"}), 500
-
-        user_data = request.get_json()
-
-        ingredients = user_data.get("ingredients", "")
-        preference = user_data.get("preference", "")
-        style = user_data.get("style", "")
-        age = user_data.get("age", "")
+        user_data = request.get_json(force=True)
 
         prompt = f"""
 User has these ingredients:
-{ingredients}
+{user_data.get('ingredients','')}
 
 Preference:
-{preference}
+{user_data.get('preference','')}
 
 Food Style:
-{style}
+{user_data.get('style','')}
 
 Age:
-{age}
+{user_data.get('age','')}
 
-Recommend exactly four recipes.
+Recommend exactly 4 recipes.
 
-For each recipe include:
+For each recipe provide:
 
-1. Recipe Name
-2. Ingredients
-3. Preparation Steps
+Recipe Name
+Ingredients
+Preparation Steps
 
 Do not use markdown.
 Do not use **.
 """
-
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
 
         payload = {
             "model": MODEL,
@@ -74,35 +64,51 @@ Do not use **.
             ]
         }
 
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
         response = requests.post(
             OPENROUTER_API_URL,
             headers=headers,
             json=payload,
-            timeout=90
+            timeout=60
         )
 
-        print(response.status_code)
-        print(response.text)
+        print("STATUS :", response.status_code)
+        print("BODY :", response.text)
 
         response.raise_for_status()
 
-        result = response.json()
+        data = response.json()
 
-        food_items = result["choices"][0]["message"]["content"]
+        if "choices" not in data:
+            return jsonify({"error": data}), 500
+
+        food_items = data["choices"][0]["message"]["content"]
 
         return jsonify({
             "foodItems": food_items
         })
 
+    except requests.exceptions.Timeout:
+        return jsonify({
+            "error": "OpenRouter request timed out."
+        }), 500
+
+    except requests.exceptions.HTTPError:
+        print(response.text)
+        return jsonify({
+            "error": response.text
+        }), 500
+
     except Exception:
         traceback.print_exc()
         return jsonify({
-            "error": "Server Error"
+            "error": "Internal Server Error"
         }), 500
 
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-print("=== NEW VERSION DEPLOYED ===")
-print(response.status_code)
-print(response.text)
